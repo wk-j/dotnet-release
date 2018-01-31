@@ -8,6 +8,7 @@ type ReleaseOption =
       Tag: string
       Title: string
       Assets: string list
+      Errors: string list
      }
 
 let defaultOptions = { 
@@ -18,9 +19,13 @@ let defaultOptions = {
     Tag = ""
     Title = ""
     Assets = []
+    Errors = []
 }
 
 let rec parseCommandLineRec args options = 
+    let appendError error = 
+        { options with Errors = error :: options.Errors }
+
     match args with
     | [] -> 
         options
@@ -29,53 +34,53 @@ let rec parseCommandLineRec args options =
         | asset :: xss ->
             parseCommandLineRec xss { options with Assets = asset :: options.Assets  }
         | _ ->
-            printfn "--asset needs a value"
-            parseCommandLineRec xs options
+            appendError "--asset needs a value"
+            |> parseCommandLineRec xs
     | "--note" :: xs ->
         match xs with
         | note :: xss  ->
             parseCommandLineRec xss { options with Note = note }
         | _ ->
-            printfn "--note needs a value"
-            parseCommandLineRec xs options
+            appendError "--note needs a value"
+            |> parseCommandLineRec xs
     | "--title" :: xs ->
         match xs with
         | title :: xss ->
             parseCommandLineRec xss { options with Title = title }
         | _ ->
-            printfn "--title needs a value"
-            parseCommandLineRec xs options
+            appendError "--title needs a value"
+            |> parseCommandLineRec xs
     | "--repository" :: xs ->
         match xs with
         | repo :: xss ->
             parseCommandLineRec xss { options with Repository = repo }
         | _ ->
-            printfn "--repository needs a value"
-            parseCommandLineRec xs options
+            appendError "--repository needs a value"
+            |> parseCommandLineRec xs 
     | "--token" :: xs ->
         match xs with
         | token::xss ->
             parseCommandLineRec xss { options with Token = token }
         | _ ->
-            printfn "--token needs a value"
-            parseCommandLineRec xs options
+            appendError "--token needs a value"
+            |> parseCommandLineRec xs
     | "--user" :: xs ->
         match xs with
         | user :: xss ->
             parseCommandLineRec xss { options with User = user }
         | _ ->
-            printfn "--user needs a value"
-            parseCommandLineRec xs options
+            appendError "--user needs a value"
+            |> parseCommandLineRec xs
     | "--tag" :: xs ->
         match xs with
         | tag :: xss ->
             parseCommandLineRec xss { options with Tag = tag }
         | _ ->
-            printfn "--tag needs a value"
-            parseCommandLineRec xs options
+            appendError "--tag needs a value"
+            |> parseCommandLineRec xs
     | x :: xs ->
-        printfn "Option %s is unrecognized " x
-        parseCommandLineRec xs options
+        appendError (sprintf "Option %s is unrecognized " x)
+        |> parseCommandLineRec xs
 
 [<EntryPoint>]
 let main argv =
