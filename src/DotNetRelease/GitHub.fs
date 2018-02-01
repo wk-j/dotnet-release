@@ -1,4 +1,6 @@
-﻿open Octokit
+﻿module DotNetRelease.GitHub
+
+open Octokit
 open System.IO
 
 type ReleaseOptions = 
@@ -12,47 +14,36 @@ type ReleaseOptions =
       Errors: string list
      }
 
-let defaultOptions = { 
-    Token = ""
-    Owner = ""
-    Repository = ""
-    Body = ""
-    Tag = ""
-    Name = ""
-    Assets = []
-    Errors = []
-}
+[<CompiledName("CreateRelease")>]
+let createReleaseo options = 
+    let client = GitHubClient(ProductHeaderValue("my-cool-app"))
+    client.Credentials <- Credentials(options.Token)
 
-module GitHub = 
-    let createReleaseo options = 
-        let client = GitHubClient(ProductHeaderValue("my-cool-app"))
-        client.Credentials <- Credentials(options.Token)
+    let release = NewRelease(options.Tag)
+    release.Name <- options.Name
+    release.Body <- options.Body
+    release.Prerelease <- false
+    release.Draft <- true
 
-        let release = NewRelease(options.Tag)
-        release.Name <- options.Name
-        release.Body <- options.Body
-        release.Prerelease <- false
-        release.Draft <- true
+    let newRelease  = 
+        client.Repository.Release.Create(options.Owner, options.Repository, release) 
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
 
-        let newRelease  = 
-            client.Repository.Release.Create(options.Owner, options.Repository, release) 
-            |> Async.AwaitTask
-            |> Async.RunSynchronously
+    let uploadAsset release file = 
+        let info = FileInfo(file: string)
+        let raw = File.OpenRead(file)
+        let asset = ReleaseAssetUpload()
+        asset.FileName <- info.Name
+        asset.RawData <- raw
 
-        let uploadAsset release file = 
-            let info = FileInfo(file: string)
-            let raw = File.OpenRead(file)
-            let asset = ReleaseAssetUpload()
-            asset.FileName <- info.Name
-            asset.RawData <- raw
+        client.Repository.Release.UploadAsset(release, asset)
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
 
-            client.Repository.Release.UploadAsset(release, asset)
-            |> Async.AwaitTask
-            |> Async.RunSynchronously
+    options.Assets |> List.map (uploadAsset newRelease)
 
-        options.Assets |> List.map (uploadAsset newRelease)
-
-let rec parseCommandLineRec args options = 
+let rec private parseCommandLineRec args options = 
     let appendError error = 
         { options with Errors = error :: options.Errors }
 
@@ -119,8 +110,18 @@ let rec parseCommandLineRec args options =
         appendError (sprintf "Option %s is unrecognized " x)
         |> parseCommandLineRec xs
 
-[<EntryPoint>]
-let main argv =
-    let rs = parseCommandLineRec (argv |> Array.toList) defaultOptions
-    printfn "%A" rs
-    0 // return an integer exit code
+[<CompiledName("ParseCommandLineOptions")>]
+let parseCommandLineOptions args = 
+
+    let defaultOptions = { 
+        Token = ""
+        Owner = ""
+        Repository = ""
+        Body = ""
+        Tag = ""
+        Name = ""
+        Assets = []
+        Errors = []
+    }
+
+    parseCommandLineRec args defaultOptions
