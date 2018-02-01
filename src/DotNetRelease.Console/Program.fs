@@ -4,8 +4,8 @@ open DotNetRelease.GitHub
 
 [<EntryPoint>]
 let main argv =
-    let rs = parseCommandLineOptions (argv |> Array.toList) 
-    printfn "%A" rs
+    let options = parseCommandLineOptions (argv |> Array.toList) 
+    let result = createNewRelease options
     0 // return an integer exit code
 
 

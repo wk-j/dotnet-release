@@ -2,6 +2,9 @@
 
 open Octokit
 open System.IO
+open Serilog
+
+let logger = LoggerConfiguration().WriteTo.Console().CreateLogger()
 
 type ReleaseOptions = 
     { Token: string
@@ -14,8 +17,47 @@ type ReleaseOptions =
       Errors: string list
      }
 
+let createRelease (client: GitHubClient) owner repository release = 
+    let newRelease  = 
+        client.Repository.Release.Create(owner, repository, release) 
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
+    (newRelease)
+
+
+[<CompiledName("UploadAsset")>]
+let uploadAsset (client: GitHubClient) release file = 
+    let info = FileInfo(file)
+    logger.Information("is asset exist - {0} - {1}", file, File.Exists file)
+
+    let releaseAsset = 
+        let str = new MemoryStream()
+        let bytes = File.ReadAllBytes(file)
+        str.Write(bytes, 0, bytes.Length)
+        str.Seek(0L, SeekOrigin.Begin) |> ignore
+
+        let extension = (Path.GetExtension file).ToUpper()
+
+        let asset = ReleaseAssetUpload()
+        asset.FileName <- info.Name
+        asset.RawData <- str
+        asset.ContentType <-
+            match extension with
+            | ".ZIP" -> "application/zip"
+            | ".MSI" | ".EXE" | ".DLL" | ".NUPKG" -> "application/octet-stream"
+            | "_" -> "application/octet-stream"
+            | _ -> "application/octet-stream"
+
+        client.Repository.Release.UploadAsset(release, asset)
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
+
+    releaseAsset
+
 [<CompiledName("CreateRelease")>]
-let createReleaseo options = 
+let createNewRelease (options: ReleaseOptions) = 
+    logger.Information("create new release - {0}", options.Tag)
+
     let client = GitHubClient(ProductHeaderValue("my-cool-app"))
     client.Credentials <- Credentials(options.Token)
 
@@ -23,25 +65,23 @@ let createReleaseo options =
     release.Name <- options.Name
     release.Body <- options.Body
     release.Prerelease <- false
-    release.Draft <- true
+    release.Draft <- false
 
-    let newRelease  = 
-        client.Repository.Release.Create(options.Owner, options.Repository, release) 
+    let newRelease = createRelease client (options.Owner) (options.Repository) release
+    logger.Information("new release result - {0}", newRelease.Url)
+
+    let lastest = 
+        client.Repository.Release.Get(options.Owner, options.Repository, newRelease.Id) 
         |> Async.AwaitTask
         |> Async.RunSynchronously
 
-    let uploadAsset release file = 
-        let info = FileInfo(file: string)
-        let raw = File.OpenRead(file)
-        let asset = ReleaseAssetUpload()
-        asset.FileName <- info.Name
-        asset.RawData <- raw
+    logger.Information("latest release - {0}", lastest.Url)
 
-        client.Repository.Release.UploadAsset(release, asset)
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
+    let assets = 
+        options.Assets |> List.map (uploadAsset client lastest) 
 
-    options.Assets |> List.map (uploadAsset newRelease)
+    for asset in assets do
+        logger.Information("asset - {0}", asset.BrowserDownloadUrl)
 
 let rec private parseCommandLineRec args options = 
     let appendError error = 
