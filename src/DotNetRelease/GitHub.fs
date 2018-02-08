@@ -3,6 +3,8 @@
 open Octokit
 open System.IO
 open Serilog
+open FSharp.Control.Tasks
+open System
 
 let logger = LoggerConfiguration().WriteTo.Console().CreateLogger()
 
@@ -18,12 +20,7 @@ type ReleaseOptions =
      }
 
 let createRelease (client: GitHubClient) owner repository release = 
-    let newRelease  = 
-        client.Repository.Release.Create(owner, repository, release) 
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
-    (newRelease)
-
+    client.Repository.Release.Create(owner, repository, release) 
 
 [<CompiledName("UploadAsset")>]
 let uploadAsset (client: GitHubClient) release file = 
@@ -31,16 +28,11 @@ let uploadAsset (client: GitHubClient) release file =
     logger.Information("is asset exist - {0} - {1}", file, File.Exists file)
 
     let releaseAsset = 
-        let str = new MemoryStream()
         let bytes = File.ReadAllBytes(file)
-        str.Write(bytes, 0, bytes.Length)
-        str.Seek(0L, SeekOrigin.Begin) |> ignore
-
         let extension = (Path.GetExtension file).ToUpper()
-
         let asset = ReleaseAssetUpload()
         asset.FileName <- info.Name
-        asset.RawData <- str
+        asset.RawData <- new MemoryStream(bytes)
         asset.ContentType <-
             match extension with
             | ".ZIP" -> "application/zip"
@@ -48,17 +40,18 @@ let uploadAsset (client: GitHubClient) release file =
             | "_" -> "application/octet-stream"
             | _ -> "application/octet-stream"
 
-        client.Repository.Release.UploadAsset(release, asset)
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
-
+        logger.Information("uploading asset - {0}", asset.FileName)
+        let upload = client.Repository.Release.UploadAsset(release, asset)
+        upload.Wait()
+        upload.Result
     releaseAsset
 
 [<CompiledName("CreateRelease")>]
 let createNewRelease (options: ReleaseOptions) = 
     logger.Information("create new release - {0}", options.Tag)
 
-    let client = GitHubClient(ProductHeaderValue("my-cool-app"))
+    let client = GitHubClient(ProductHeaderValue("my-wk-app"))
+    client.SetRequestTimeout(TimeSpan.FromMinutes(20.0))
     client.Credentials <- Credentials(options.Token)
 
     let release = NewRelease(options.Tag)
@@ -67,21 +60,17 @@ let createNewRelease (options: ReleaseOptions) =
     release.Prerelease <- false
     release.Draft <- false
 
-    let newRelease = createRelease client (options.Owner) (options.Repository) release
-    logger.Information("new release result - {0}", newRelease.Url)
+    task { 
+        let! newRelease = createRelease client (options.Owner) (options.Repository) release
+        logger.Information("new release result - {0}", newRelease.Url)
 
-    let lastest = 
-        client.Repository.Release.Get(options.Owner, options.Repository, newRelease.Id) 
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
+        let! lastest = client.Repository.Release.Get(options.Owner, options.Repository, newRelease.Id) 
+        logger.Information("latest release - {0}", lastest.Url)
 
-    logger.Information("latest release - {0}", lastest.Url)
-
-    let assets = 
-        options.Assets |> List.map (uploadAsset client lastest) 
-
-    for asset in assets do
-        logger.Information("asset - {0}", asset.BrowserDownloadUrl)
+        for item in options.Assets do
+            let rs = uploadAsset client lastest item
+            logger.Information ("url - {0}", rs.BrowserDownloadUrl)
+    }
 
 let rec private parseCommandLineRec args options = 
     let appendError error = 
@@ -155,7 +144,7 @@ let parseCommandLineOptions args =
 
     let defaultOptions = { 
         Token = ""
-        Owner = ""
+        Owner = "wk-j"
         Repository = ""
         Body = ""
         Tag = ""

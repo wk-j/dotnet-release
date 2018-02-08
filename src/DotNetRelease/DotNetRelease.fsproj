@@ -4,6 +4,7 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="TaskBuilder.fs" />
     <Compile Include="GitHub.fs" />
   </ItemGroup>
   <ItemGroup>
