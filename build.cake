@@ -1,26 +1,41 @@
+#addin "wk.StartProcess"
+#addin "wk.ProjectParser"
+
+using PS = StartProcess.Processor;
+using ProjectParser;
+
+var nugetToken = EnvironmentVariable("npi");
 var name = "DotNetRelease.Console";
 
-var project = $"src/{name}/{name}.fsproj";
+var currentDir = new DirectoryInfo(".").FullName;
+var info = Parser.Parse($"src/{name}/{name}.fsproj");
+var publishDir = ".publish";
 
-Task("Publish")
-    .Does(() => {
-        DotNetCorePublish(project, new DotNetCorePublishSettings {
-            OutputDirectory = "publish/DotNetRelease.Console"
-        });
-    });
-
-Task("Zip")
-    .IsDependentOn("Publish")
-    .Does(() => {
-        Zip($"publish/DotNetRelease.Console", "publish/DotNetRelease.Console.0.1.0.zip");
-    });
-
-
-Task("Build").Does(() => {
-    MSBuild(project, settings => {
-        settings.WithTarget("Build");
+Task("Pack").Does(() => {
+    CleanDirectory(publishDir);
+    DotNetCorePack($"src/{name}", new DotNetCorePackSettings {
+        OutputDirectory = publishDir
     });
 });
 
-var target = Argument("target", "default");
+Task("Publish-NuGet")
+    .IsDependentOn("Pack")
+    .Does(() => {
+        var nupkg = new DirectoryInfo(publishDir).GetFiles("*.nupkg").LastOrDefault();
+        var package = nupkg.FullName;
+        NuGetPush(package, new NuGetPushSettings {
+            Source = "https://www.nuget.org/api/v2/package",
+            ApiKey = nugetToken
+        });
+});
+
+Task("Install")
+    .IsDependentOn("Pack")
+    .Does(() => {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        PS.StartProcess($"dotnet tool uninstall -g {info.PackageId}");
+        PS.StartProcess($"dotnet tool install   -g {info.PackageId}  --add-source {currentDir}/{publishDir} --version {info.Version}");
+    });
+
+var target = Argument("target", "Pack");
 RunTarget(target);

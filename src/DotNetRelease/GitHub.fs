@@ -8,7 +8,7 @@ open System
 
 let logger = LoggerConfiguration().WriteTo.Console().CreateLogger()
 
-type ReleaseOptions = 
+type ReleaseOptions =
     { Token: string
       Owner: string
       Repository: string
@@ -19,15 +19,15 @@ type ReleaseOptions =
       Errors: string list
      }
 
-let createRelease (client: GitHubClient) owner repository release = 
-    client.Repository.Release.Create(owner, repository, release) 
+let createRelease (client: GitHubClient) owner repository release =
+    client.Repository.Release.Create(owner, repository, release)
 
 [<CompiledName("UploadAsset")>]
-let uploadAsset (client: GitHubClient) release file = 
+let uploadAsset (client: GitHubClient) release file =
     let info = FileInfo(file)
     logger.Information("is asset exist - {0} - {1}", file, File.Exists file)
 
-    let releaseAsset = 
+    let releaseAsset =
         let bytes = File.ReadAllBytes(file)
         let extension = (Path.GetExtension file).ToUpper()
         let asset = ReleaseAssetUpload()
@@ -37,7 +37,6 @@ let uploadAsset (client: GitHubClient) release file =
             match extension with
             | ".ZIP" -> "application/zip"
             | ".MSI" | ".EXE" | ".DLL" | ".NUPKG" -> "application/octet-stream"
-            | "_" -> "application/octet-stream"
             | _ -> "application/octet-stream"
 
         logger.Information("uploading asset - {0}", asset.FileName)
@@ -47,10 +46,10 @@ let uploadAsset (client: GitHubClient) release file =
     releaseAsset
 
 [<CompiledName("CreateRelease")>]
-let createNewRelease (options: ReleaseOptions) = 
+let createNewRelease (options: ReleaseOptions) =
     logger.Information("create new release - {0}", options.Tag)
 
-    let client = GitHubClient(ProductHeaderValue("my-wk-app"))
+    let client = GitHubClient(ProductHeaderValue("my-cool-app"))
     client.SetRequestTimeout(TimeSpan.FromMinutes(20.0))
     client.Credentials <- Credentials(options.Token)
 
@@ -60,11 +59,11 @@ let createNewRelease (options: ReleaseOptions) =
     release.Prerelease <- false
     release.Draft <- false
 
-    task { 
+    task {
         let! newRelease = createRelease client (options.Owner) (options.Repository) release
         logger.Information("new release result - {0}", newRelease.Url)
 
-        let! lastest = client.Repository.Release.Get(options.Owner, options.Repository, newRelease.Id) 
+        let! lastest = client.Repository.Release.Get(options.Owner, options.Repository, newRelease.Id)
         logger.Information("latest release - {0}", lastest.Url)
 
         for item in options.Assets do
@@ -72,8 +71,8 @@ let createNewRelease (options: ReleaseOptions) =
             logger.Information ("url - {0}", rs.BrowserDownloadUrl)
     }
 
-let rec private parseCommandLineRec args options = 
-    let appendError error = 
+let rec private parseCommandLineRec args options =
+    let appendError error =
         { options with Errors = error :: options.Errors }
 
     match args with
@@ -94,7 +93,7 @@ let rec private parseCommandLineRec args options =
         | _ ->
             appendError "Option --body needs a value"
             |> parseCommandLineRec xs
-            
+
     | "--name" :: xs ->
         match xs with
         | title :: xss ->
@@ -109,7 +108,7 @@ let rec private parseCommandLineRec args options =
             parseCommandLineRec xss { options with Repository = repo }
         | _ ->
             appendError "Option --repository needs a value"
-            |> parseCommandLineRec xs 
+            |> parseCommandLineRec xs
 
     | "--token" :: xs ->
         match xs with
@@ -140,9 +139,9 @@ let rec private parseCommandLineRec args options =
         |> parseCommandLineRec xs
 
 [<CompiledName("ParseCommandLineOptions")>]
-let parseCommandLineOptions args = 
+let parseCommandLineOptions args =
 
-    let defaultOptions = { 
+    let defaultOptions = {
         Token = ""
         Owner = "wk-j"
         Repository = ""
