@@ -1,6 +1,6 @@
 language: csharp
 mono: none
-dotnet: 2.1.0
+dotnet: 2.1.401
 script:
   - dotnet restore  ./src/DotNetRelease
   - dotnet restore  ./src/DotNetRelease.Console
