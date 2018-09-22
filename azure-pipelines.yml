@@ -8,8 +8,7 @@ pool:
 
 variables:
   buildConfiguration: 'Release'
-  version: '0.2.2'
-  project: 'src/JsonImport/JsonImport.csproj'
+  project: 'src/DotNetRelease.Console/DotNetRelease.Console.fsproj'
 
 steps:
 - script: dotnet build $(project)
