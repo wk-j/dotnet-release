@@ -5,6 +5,7 @@ open System.IO
 open Serilog
 open FSharp.Control.Tasks
 open System
+open System.IO
 
 let logger = LoggerConfiguration().WriteTo.Console().CreateLogger()
 
@@ -84,6 +85,30 @@ let rec private parseCommandLineRec args options =
             parseCommandLineRec xss { options with Assets = asset :: options.Assets  }
         | _ ->
             appendError "Option --asset needs a value"
+            |> parseCommandLineRec xs
+
+    | "--assets" :: xs ->
+        match xs with
+        | assets :: xss ->
+            let files =
+                let targetFiles =
+                    DirectoryInfo(".").GetDirectories("*", SearchOption.TopDirectoryOnly)
+                    |> Seq.filter(fun x -> x.Name <> "node_modules")
+                    |> Seq.filter(fun x -> x.Name <> "packages")
+                    |> Seq.filter(fun x -> x.Name <> ".git")
+                    |> Seq.map(fun x -> x.GetFiles(assets, SearchOption.AllDirectories))
+                    |> Seq.collect id
+                    |> Seq.filter(fun x -> x.FullName.Contains("obj") |> not)
+                    |> Seq.filter(fun x -> x.FullName.Contains("bin") |> not)
+                    |> Seq.filter(fun x -> x.FullName.Contains("node_modules") |> not)
+                    |> Seq.filter(fun x -> x.FullName.Contains("packages") |> not)
+                    |> Seq.filter(fun x -> x.FullName.Contains(".git") |> not)
+                targetFiles
+                |> Seq.map(fun x -> x.FullName)
+                |> Seq.toList
+            parseCommandLineRec xss { options with Assets = files @ options.Assets }
+        | _ ->
+            appendError "Option --assets needs a value"
             |> parseCommandLineRec xs
 
     | "--body" :: xs ->
