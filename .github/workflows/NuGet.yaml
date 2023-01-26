@@ -25,7 +25,7 @@ jobs:
 
       - name: Build
         run: |
-          dotnet pack src/$PROJECT --output __publish__/X /p:Version=${{ steps.get-version.outputs.VERSION }}
+          dotnet pack src/DotNetRelease.Console --output __publish__/X /p:Version=${{ steps.get-version.outputs.VERSION }}
 
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: 1
